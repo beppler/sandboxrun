@@ -41,8 +41,8 @@ Two layers of defence in the proxy:
   TCP to the proxy over a Unix socket.
 - **apple** (macOS): container runs on a host-only network; the proxy listens
   on the network gateway.
-- **wslc** (Windows): proxy binds on the host's loopback (`127.0.0.1`); `sandboxinit guard` runs the
-  workload in an empty network namespace (no `nft` needed in the image; the container gets `SYS_ADMIN`+`NET_ADMIN`, dropped before the workload runs) and drops privileges to `-uid`/`-gid`.
+- **wslc** (Windows): proxy binds on the host's loopback (`127.0.0.1`); the
+  workload runs in an empty network namespace as `-uid`/`-gid`.
 
 ## Building
 
@@ -50,19 +50,3 @@ Two layers of defence in the proxy:
 make helpers   # static Linux sandboxinit for amd64/arm64 into dist/
 make hosts     # sandboxrun for linux/darwin/windows into dist/
 ```
-
-## Using engine and proxy from other Go packages
-
-Both packages are importable from other modules:
-
-```go
-import (
-    "go.beppler.dev.br/sandboxrun/engine"
-    "go.beppler.dev.br/sandboxrun/proxy"
-)
-```
-
-- `engine.ForName("podman"|"apple"|"wslc")` returns a runtime that turns an
-  `engine.Spec` into an `engine.Plan` (command line + listener).
-- `proxy.New(proxy.Config{Allow: ..., Ports: ...})` returns the allowlisting
-  proxy server.
