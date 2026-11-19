@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -114,19 +115,17 @@ type Engine interface {
 	Prepare(ctx context.Context, s Spec) (*Plan, error)
 }
 
-func ForName(name string) (Engine, error) {
-	if name == "" {
-		return nil, fmt.Errorf("unsupported OS: pass -runtime (podman|apple|wslc) explicitly")
-	}
-	switch name {
-	case "podman":
-		return podman{}, nil
-	case "apple":
+// Default returns the engine for this OS: apple (macOS), wslc (Windows), podman (Linux).
+func Default() (Engine, error) {
+	switch runtime.GOOS {
+	case "darwin":
 		return apple{}, nil
-	case "wslc":
+	case "windows":
 		return wslc{}, nil
+	case "linux":
+		return podman{}, nil
 	}
-	return nil, fmt.Errorf("unknown runtime %q (want podman|apple|wslc)", name)
+	return nil, fmt.Errorf("unsupported OS %q", runtime.GOOS)
 }
 
 func proxyEnv(url string) []string {

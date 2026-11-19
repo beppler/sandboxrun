@@ -19,7 +19,6 @@ sandboxrun -allow google.com -allow "*.google.com" -image alpine -- wget -q -S -
 | ---- | ----------- |
 | `-allow HOST` | Allowed host, repeatable: exact (`api.github.com`) or wildcard (`*.example.com`). Omit entirely for no network access at all |
 | `-port PORT` | Allowed destination port, repeatable (default: 80, 443) |
-| `-runtime NAME` | `podman` (Linux, default) \| `apple` (macOS) \| `wslc` (Windows/WSL) |
 | `-image IMG` | Container image |
 | `-name NAME` | Optional container name, passed to the runtime as `--name` |
 | `-helper PATH` | Path to a Linux build of `sandboxinit` (podman, wslc). Default: `sandboxinit-linux-<arch>` next to the `sandboxrun` binary |
@@ -38,6 +37,8 @@ Two layers of defence in the proxy:
    never be used to reach the host itself or the LAN (DNS rebinding).
 
 ### Runtimes
+
+Chosen automatically by OS.
 
 - **podman** (Linux): container has no network; `sandboxinit relay` forwards
   TCP to the proxy over a Unix socket.

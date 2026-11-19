@@ -7,17 +7,6 @@ import (
 	"testing"
 )
 
-func TestDefaultRuntime(t *testing.T) {
-	switch runtime.GOOS {
-	case "linux", "darwin", "windows":
-		if defaultRuntime() == "" {
-			t.Fatalf("no default runtime on %s", runtime.GOOS)
-		}
-	default:
-		t.Skip("unsupported OS")
-	}
-}
-
 func TestDefaultHelper(t *testing.T) {
 	dir := t.TempDir()
 	if got := defaultHelper(dir); got != "" {

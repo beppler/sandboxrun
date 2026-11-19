@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -136,5 +137,16 @@ func TestVolumeArgs(t *testing.T) {
 
 	if a, err := volumeArgs(nil, true); err != nil || len(a) != 0 {
 		t.Errorf("empty volumes: %v, %v", a, err)
+	}
+}
+
+func TestDefault(t *testing.T) {
+	want := map[string]Engine{"linux": podman{}, "darwin": apple{}, "windows": wslc{}}[runtime.GOOS]
+	if want == nil {
+		t.Skip("unsupported OS")
+	}
+	got, err := Default()
+	if err != nil || got != want {
+		t.Fatalf("Default() = %T, %v; want %T", got, err, want)
 	}
 }
