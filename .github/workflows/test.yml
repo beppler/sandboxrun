@@ -36,12 +36,12 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Vet
-        run: go vet ./...
+      - name: Install make
+        if: runner.os == 'Windows'
+        run: choco install make -y
 
-      # All runners have a C toolchain, so -race works everywhere.
       - name: Test
-        run: go test -race ./...
+        run: make test
 
   # Single stable check name for the branch ruleset: require only "test".
   test:
