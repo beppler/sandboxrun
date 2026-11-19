@@ -89,6 +89,7 @@ type Spec struct {
 	// wslc: host address the proxy binds to ("0.0.0.0" by default) and the
 	// unprivileged user the workload is dropped to inside the container.
 	Bind     string
+	Host     string // wslc: how the container reaches the proxy; "" = host.wslc.internal
 	UID, GID int
 
 	// apple: proxy port on the host-only network gateway.

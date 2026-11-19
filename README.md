@@ -23,6 +23,7 @@ sandboxrun -allow google.com -allow "*.google.com" -image alpine -- wget -q -S -
 | `-helper PATH` | Path to a Linux build of `sandboxinit` (podman, wslc). Default: `sandboxinit-linux-<arch>` next to the `sandboxrun` binary |
 | `-volume HOST:CTR[:rw]` | Mount a host path into the container, repeatable; default read-only, add `:rw` for read-write |
 | `-it` | Interactive TTY |
+| `-proxy ADDR` | wslc: address the container uses to reach the host proxy (default: `host.wslc.internal`) |
 | `-bind ADDR` | wslc: host address the proxy binds to (default `0.0.0.0`, see the security note below) |
 | `-uid` / `-gid` | wslc: user the workload runs as inside the container (default 1000) |
 | `-log DEST` | Proxy log: empty = off, `-` = stderr, otherwise a file path |
@@ -42,8 +43,8 @@ Two layers of defence in the proxy:
   TCP to the proxy over a Unix socket.
 - **apple** (macOS): container runs on a host-only network; the proxy listens
   on the network gateway.
-- **wslc** (Windows): proxy binds on the host; `sandboxinit guard` sets up
-  nftables lockdown and drops privileges to `-uid`/`-gid`.
+- **wslc** (Windows): proxy binds on the host; `sandboxinit guard` runs the
+  workload in an empty network namespace (no `nft` needed in the image; the container gets `SYS_ADMIN`+`NET_ADMIN`, dropped before the workload runs) and drops privileges to `-uid`/`-gid`.
 
 ### Security note: wslc proxy binding
 

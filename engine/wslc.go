@@ -11,18 +11,18 @@ import (
 // wslc (Windows): no host-only network mode was found, so the container keeps
 // the default NAT network and locks itself down from the inside:
 //
-//	sandboxinit guard  (runs as root with NET_ADMIN)
-//	  1. finds the default gateway (= the Windows host as seen from the VM)
-//	  2. installs nftables: default-drop output, allow only gateway:proxyPort
+//	sandboxinit guard  (runs as root with SYS_ADMIN+NET_ADMIN)
+//	  1. resolves host.wslc.internal (= the Windows host as seen from the container)
+//	  2. runs the workload in an empty network namespace (only lo); a relay there
+//	     reaches host:proxyPort through a unix socket. No nft/iptables needed.
 //	  3. sets no_new_privs, drops to UID/GID, execs the real command
 //
 // ASSUMPTIONS to verify:
 //   - wslc run accepts Docker-style flags (--rm, --cap-add, --user,
 //     --entrypoint, -v, -e). Check `wslc container run --help`.
-//   - the container's default gateway reaches a listener on the Windows host.
-//     If not, find the right host address and pass it to the helper.
+//   - host.wslc.internal reaches a listener on the Windows host (confirmed;
+//     the container's default gateway does NOT, it is the VM bridge).
 //   - Windows path -> -v mount syntax (drive letters contain ':').
-//   - the image's nft binary exists (the helper shells out to `nft`).
 //
 // SECURITY NOTE: Spec.Bind defaults to 0.0.0.0 because the container reaches
 // the host through the WSL virtual network's gateway address, which is not
@@ -65,7 +65,8 @@ func (wslc) Prepare(_ context.Context, s Spec) (*Plan, error) {
 
 	args := []string{
 		"--rm",
-		"--cap-add", "NET_ADMIN",
+		"--cap-add", "SYS_ADMIN", // CLONE_NEWNET
+		"--cap-add", "NET_ADMIN", // bring lo up in the new netns
 		"--user", "0",
 		"-v", helper + ":/sandboxinit:ro",
 		"--entrypoint", "/sandboxinit",
@@ -78,8 +79,15 @@ func (wslc) Prepare(_ context.Context, s Spec) (*Plan, error) {
 		args = append(args, "--name", s.Name)
 	}
 
+	// The container's default gateway is only the VM's bridge, not Windows;
+	// wslc exposes the Windows host as host.wslc.internal.
+	host := s.Host
+	if host == "" {
+		host = "host.wslc.internal"
+	}
 	post := []string{
 		"guard",
+		"--host", host,
 		"--port", strconv.Itoa(port),
 		"--uid", strconv.Itoa(uid),
 		"--gid", strconv.Itoa(gid),

@@ -30,6 +30,38 @@ func TestNameArg(t *testing.T) {
 	}
 }
 
+func TestWslcGuardArgs(t *testing.T) {
+	has := func(args []string, a, b string) bool {
+		for i := range args {
+			if args[i] == a && (b == "" || (i+1 < len(args) && args[i+1] == b)) {
+				return true
+			}
+		}
+		return false
+	}
+	plan, err := wslc{}.Prepare(context.Background(), Spec{HelperPath: "/tmp/sandboxinit", Cmd: []string{"true"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer plan.Cleanup()
+	for _, c := range []string{"SYS_ADMIN", "NET_ADMIN"} {
+		if !has(plan.RunArgs, "--cap-add", c) {
+			t.Errorf("missing --cap-add %s: %v", c, plan.RunArgs)
+		}
+	}
+	if !has(plan.Args, "--host", "host.wslc.internal") {
+		t.Errorf("missing default --host: %v", plan.Args)
+	}
+	plan2, err := wslc{}.Prepare(context.Background(), Spec{HelperPath: "/tmp/sandboxinit", Host: "10.0.0.1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer plan2.Cleanup()
+	if !has(plan2.Args, "--host", "10.0.0.1") {
+		t.Errorf("-proxy override not passed: %v", plan2.Args)
+	}
+}
+
 func TestParseVolume(t *testing.T) {
 	cases := []struct {
 		in    string
