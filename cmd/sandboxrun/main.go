@@ -181,8 +181,11 @@ func defaultRuntime() string {
 		return "apple"
 	case "windows":
 		return "wslc"
+	case "linux":
+		return "podman"
 	}
-	return "podman"
+	// Other OSes are unsupported: ForName rejects the empty name.
+	return ""
 }
 
 // defaultHelper returns the make-built helper beside the executable, or "".

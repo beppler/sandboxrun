@@ -5,6 +5,8 @@ allow. `sandboxrun` starts an allowlisting HTTP/HTTPS forward proxy on the
 host, then launches the container with no direct network access — only a path
 to that proxy.
 
+Supported hosts: Linux, macOS and Windows only.
+
 ## Usage
 
 ```sh

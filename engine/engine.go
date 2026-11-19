@@ -115,6 +115,9 @@ type Engine interface {
 }
 
 func ForName(name string) (Engine, error) {
+	if name == "" {
+		return nil, fmt.Errorf("unsupported OS: pass -runtime (podman|apple|wslc) explicitly")
+	}
 	switch name {
 	case "podman":
 		return podman{}, nil
