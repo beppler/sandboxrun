@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"net"
 	"path/filepath"
 	"testing"
 )
@@ -44,6 +45,9 @@ func TestWslcGuardArgs(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer plan.Cleanup()
+	if a := plan.Listener.Addr().(*net.TCPAddr); !a.IP.IsLoopback() {
+		t.Errorf("listener not loopback-only: %v", a)
+	}
 	for _, c := range []string{"SYS_ADMIN", "NET_ADMIN"} {
 		if !has(plan.RunArgs, "--cap-add", c) {
 			t.Errorf("missing --cap-add %s: %v", c, plan.RunArgs)
@@ -51,14 +55,6 @@ func TestWslcGuardArgs(t *testing.T) {
 	}
 	if !has(plan.Args, "--host", "host.wslc.internal") {
 		t.Errorf("missing default --host: %v", plan.Args)
-	}
-	plan2, err := wslc{}.Prepare(context.Background(), Spec{HelperPath: "/tmp/sandboxinit", Host: "10.0.0.1"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer plan2.Cleanup()
-	if !has(plan2.Args, "--host", "10.0.0.1") {
-		t.Errorf("-proxy override not passed: %v", plan2.Args)
 	}
 }
 

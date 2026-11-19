@@ -24,16 +24,8 @@ import (
 //     the container's default gateway does NOT, it is the VM bridge).
 //   - Windows path -> -v mount syntax (drive letters contain ':').
 //
-// SECURITY NOTE: Spec.Bind defaults to 0.0.0.0 because the container reaches
-// the host through the WSL virtual network's gateway address, which is not
-// known until runtime (loopback would break the container path). The allowlist
-// is then the only thing stopping other machines on the LAN from using this
-// proxy. To scope exposure, add a Windows Firewall inbound rule for the proxy
-// port restricted to the WSL subnet, or pass -bind with the host's WSL-side
-// address (find it with `wsl.exe -- ip route show default`, the "via" address).
-//
-// Also add a Windows Firewall inbound rule scoped to the WSL/WSLC subnet for
-// the proxy port, because the listener binds to Spec.Bind (default 0.0.0.0).
+// The proxy always binds to 127.0.0.1: host.wslc.internal reaches the
+// Windows loopback (verified), so nothing is exposed to the LAN.
 type wslc struct{}
 
 func (wslc) Prepare(_ context.Context, s Spec) (*Plan, error) {
@@ -48,11 +40,7 @@ func (wslc) Prepare(_ context.Context, s Spec) (*Plan, error) {
 	if err != nil {
 		return nil, err
 	}
-	bind := s.Bind
-	if bind == "" {
-		bind = "0.0.0.0"
-	}
-	ln, err := net.Listen("tcp", net.JoinHostPort(bind, "0"))
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return nil, err
 	}
@@ -81,13 +69,9 @@ func (wslc) Prepare(_ context.Context, s Spec) (*Plan, error) {
 
 	// The container's default gateway is only the VM's bridge, not Windows;
 	// wslc exposes the Windows host as host.wslc.internal.
-	host := s.Host
-	if host == "" {
-		host = "host.wslc.internal"
-	}
 	post := []string{
 		"guard",
-		"--host", host,
+		"--host", "host.wslc.internal",
 		"--port", strconv.Itoa(port),
 		"--uid", strconv.Itoa(uid),
 		"--gid", strconv.Itoa(gid),

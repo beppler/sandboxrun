@@ -62,8 +62,6 @@ func run() int {
 	rtName := flag.String("runtime", defaultRuntime(), "podman | apple | wslc")
 	image := flag.String("image", "", "container image")
 	helper := flag.String("helper", "", "path to a LINUX build of sandboxinit (podman, wslc); default: sandboxinit-linux-<arch> next to this binary")
-	bind := flag.String("bind", "0.0.0.0", "wslc: host address the proxy binds to")
-	proxyAddr := flag.String("proxy", "", "wslc: address the container uses to reach the host proxy (default: host.wslc.internal)")
 	uid := flag.Int("uid", 1000, "wslc: user the workload runs as")
 	gid := flag.Int("gid", 1000, "wslc: group the workload runs as")
 	tty := flag.Bool("it", false, "interactive TTY")
@@ -105,7 +103,7 @@ func run() int {
 	}
 	plan, err := eng.Prepare(ctx, engine.Spec{
 		Image: *image, Name: *name, Cmd: cmd, Interactive: *tty,
-		HelperPath: *helper, Bind: *bind, Host: *proxyAddr, UID: *uid, GID: *gid, Volumes: volumes,
+		HelperPath: *helper, UID: *uid, GID: *gid, Volumes: volumes,
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "prepare:", err)
