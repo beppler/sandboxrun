@@ -1,18 +1,38 @@
-.PHONY: all test helpers hosts
+export CGO_ENABLED=0
 
-all: test helpers hosts
+# Shared build command: stripped, path-free binaries for hosts and helpers.
+GOBUILD = go build -trimpath -ldflags="-s -w"
+
+.PHONY: all test hosts hosts-linux-amd64 hosts-darwin-arm64 hosts-windows-amd64 helpers helpers-linux-amd64 helpers-linux-arm64
+
+all: test hosts helpers
 
 test:
 	go vet ./...
 	go test ./...
 
-# Static Linux helpers that get mounted into the containers.
-helpers:
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w' -o dist/sandboxinit-linux-amd64 ./cmd/sandboxinit
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags='-s -w' -o dist/sandboxinit-linux-arm64 ./cmd/sandboxinit
-
 # Host binaries, one per platform you run on.
-hosts:
-	GOOS=linux   GOARCH=amd64 go build -o dist/sandboxrun-linux-amd64   ./cmd/sandboxrun
-	GOOS=darwin  GOARCH=arm64 go build -o dist/sandboxrun-darwin-arm64  ./cmd/sandboxrun
-	GOOS=windows GOARCH=amd64 go build -o dist/sandboxrun-windows-amd64.exe ./cmd/sandboxrun
+hosts: hosts-linux-amd64 hosts-darwin-arm64 hosts-windows-amd64
+hosts-linux-amd64: export GOOS=linux
+hosts-linux-amd64: export GOARCH=amd64
+hosts-linux-amd64:
+	$(GOBUILD) -o dist/sandboxrun-linux-amd64   ./cmd/sandboxrun
+hosts-darwin-arm64: export GOOS=darwin
+hosts-darwin-arm64: export GOARCH=arm64
+hosts-darwin-arm64:
+	$(GOBUILD) -o dist/sandboxrun-darwin-arm64  ./cmd/sandboxrun
+hosts-windows-amd64: export GOOS=windows
+hosts-windows-amd64: export GOARCH=amd64
+hosts-windows-amd64:
+	$(GOBUILD) -o dist/sandboxrun-windows-amd64.exe ./cmd/sandboxrun
+
+# Static Linux helpers that get mounted into the containers.
+helpers: helpers-linux-amd64 helpers-linux-arm64
+helpers-linux-amd64: export GOOS=linux
+helpers-linux-amd64: export GOARCH=amd64
+helpers-linux-amd64:
+	$(GOBUILD) -o dist/sandboxinit-linux-amd64 ./cmd/sandboxinit
+helpers-linux-arm64: export GOOS=linux
+helpers-linux-arm64: export GOARCH=arm64
+helpers-linux-arm64:
+	$(GOBUILD) -o dist/sandboxinit-linux-arm64 ./cmd/sandboxinit
