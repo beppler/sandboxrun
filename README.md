@@ -20,7 +20,7 @@ sandboxrun -allow google.com -allow "*.google.com" -image alpine -- wget -q -S -
 | `-runtime NAME` | `podman` (Linux, default) \| `apple` (macOS) \| `wslc` (Windows/WSL) |
 | `-image IMG` | Container image |
 | `-name NAME` | Optional container name, passed to the runtime as `--name` |
-| `-helper PATH` | Path to a Linux build of `sandboxinit` (podman, wslc) |
+| `-helper PATH` | Path to a Linux build of `sandboxinit` (podman, wslc). Default: `sandboxinit-linux-<arch>` next to the `sandboxrun` binary |
 | `-volume HOST:CTR[:rw]` | Mount a host path into the container, repeatable; default read-only, add `:rw` for read-write |
 | `-it` | Interactive TTY |
 | `-bind ADDR` | wslc: host address the proxy binds to (default `0.0.0.0`, see the security note below) |

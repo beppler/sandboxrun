@@ -2,7 +2,7 @@
 // container that can only reach that proxy.
 //
 //	sandboxrun -allow api.github.com -allow '*.githubusercontent.com' \
-//	    -image alpine:3 -helper ./sandboxinit-linux-amd64 -- \
+//	    -image alpine:3 -- \
 //	    wget -qO- https://api.github.com
 package main
 
@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
@@ -54,23 +55,13 @@ func (v *volumeFlag) Set(s string) error {
 	return nil
 }
 
-func defaultRuntime() string {
-	switch runtime.GOOS {
-	case "darwin":
-		return "apple"
-	case "windows":
-		return "wslc"
-	}
-	return "podman"
-}
-
 func main() { os.Exit(run()) }
 
 func run() int {
 	var allow, ports multi
 	rtName := flag.String("runtime", defaultRuntime(), "podman | apple | wslc")
 	image := flag.String("image", "", "container image")
-	helper := flag.String("helper", "", "path to a LINUX build of sandboxinit (podman, wslc)")
+	helper := flag.String("helper", "", "path to a LINUX build of sandboxinit (podman, wslc); default: sandboxinit-linux-<arch> next to this binary")
 	bind := flag.String("bind", "0.0.0.0", "wslc: host address the proxy binds to")
 	uid := flag.Int("uid", 1000, "wslc: user the workload runs as")
 	gid := flag.Int("gid", 1000, "wslc: group the workload runs as")
@@ -82,6 +73,12 @@ func run() int {
 	flag.Var(&allow, "allow", "allowed host (repeatable): example.com or *.example.com")
 	flag.Var(&ports, "port", "allowed destination port (repeatable, default 80 and 443)")
 	flag.Parse()
+
+	if *helper == "" {
+		if exe, err := os.Executable(); err == nil {
+			*helper = defaultHelper(filepath.Dir(exe))
+		}
+	}
 
 	cmd := flag.Args()
 	if *image == "" || len(cmd) == 0 {
@@ -177,4 +174,24 @@ func run() int {
 		fmt.Fprintln(os.Stderr, "run:", runErr)
 		return 1
 	}
+}
+
+func defaultRuntime() string {
+	switch runtime.GOOS {
+	case "darwin":
+		return "apple"
+	case "windows":
+		return "wslc"
+	}
+	return "podman"
+}
+
+// defaultHelper returns the make-built helper beside the executable, or "".
+// shortcut: assumes container arch == host arch; pass -helper otherwise.
+func defaultHelper(dir string) string {
+	p := filepath.Join(dir, "sandboxinit-linux-"+runtime.GOARCH)
+	if _, err := os.Stat(p); err != nil {
+		return ""
+	}
+	return p
 }
