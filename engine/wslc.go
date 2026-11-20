@@ -60,6 +60,7 @@ func (wslc) Prepare(_ context.Context, s Spec) (*Plan, error) {
 		"--entrypoint", "/sandboxinit",
 	}
 	args = append(args, va...)
+	args = append(args, proxyEnv("http://"+relayListen)...)
 	if s.Interactive {
 		args = append(args, "-it")
 	}
@@ -73,6 +74,7 @@ func (wslc) Prepare(_ context.Context, s Spec) (*Plan, error) {
 		"guard",
 		"--host", "host.wslc.internal",
 		"--port", strconv.Itoa(port),
+		"--listen", relayListen,
 		"--uid", strconv.Itoa(uid),
 		"--gid", strconv.Itoa(gid),
 		"--",

@@ -130,6 +130,7 @@ func proxyEnv(url string) []string {
 	for _, k := range []string{"HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"} {
 		a = append(a, "-e", k+"="+url)
 	}
-	// Make sure nothing is exempted from the proxy.
-	return append(a, "-e", "NO_PROXY=", "-e", "no_proxy=")
+	// Only loopback bypasses the proxy.
+	const noProxy = "localhost,127.0.0.1,::1,[::1]"
+	return append(a, "-e", "NO_PROXY="+noProxy, "-e", "no_proxy="+noProxy)
 }

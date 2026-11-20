@@ -3,7 +3,7 @@
 // sandboxinit is the tiny static helper that runs INSIDE the container.
 //
 //	relay  --sock S --listen A [--uid U --gid G] -- cmd...   TCP A -> unix socket S
-//	guard  --port P --uid U --gid G -- cmd   (wslc) runs cmd in an empty network
+//	guard  --host H --port P --listen A --uid U --gid G -- cmd   (wslc) runs cmd in an empty network
 //	       namespace (only lo); a relay inside reaches the host proxy through a
 //	       unix socket that the parent, still in the container's netns, forwards
 //	       to gateway:P. No firewall tool needed in the image.
@@ -186,10 +186,11 @@ func guard(args []string) {
 	uid := fs.Int("uid", 1000, "uid to drop to")
 	gid := fs.Int("gid", 1000, "gid to drop to")
 	host := fs.String("host", "", "host proxy address")
+	listen := fs.String("listen", "", "loopback address of the relay in the workload's netns")
 	_ = fs.Parse(args)
 	cmd := fs.Args()
-	if *port == 0 || *host == "" || len(cmd) == 0 {
-		die("guard: --port, --host and a command are required")
+	if *port == 0 || *host == "" || *listen == "" || len(cmd) == 0 {
+		die("guard: --port, --host, --listen and a command are required")
 	}
 	target := net.JoinHostPort(*host, strconv.Itoa(*port))
 
@@ -207,16 +208,9 @@ func guard(args []string) {
 	_ = os.Chmod(sock, 0o666) // the workload's uid must connect
 	go serve(ln, func() (net.Conn, error) { return net.Dial("tcp", target) })
 
-	const proxy = "http://127.0.0.1:3128"
-	for _, k := range []string{"HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"} {
-		os.Setenv(k, proxy)
-	}
-	os.Setenv("NO_PROXY", "")
-	os.Setenv("no_proxy", "")
-
 	// Re-exec as the relay in a new, empty netns (needs CAP_SYS_ADMIN); it
 	// drops privileges itself. We drop ours once it has been cloned.
-	child := append([]string{"/proc/self/exe", "relay", "--sock", sock, "--listen", "127.0.0.1:3128",
+	child := append([]string{"/proc/self/exe", "relay", "--sock", sock, "--listen", *listen,
 		"--uid", strconv.Itoa(*uid), "--gid", strconv.Itoa(*gid), "--"}, cmd...)
 	os.Exit(runChild(child, &syscall.SysProcAttr{Cloneflags: syscall.CLONE_NEWNET},
 		func() {
@@ -227,4 +221,3 @@ func guard(args []string) {
 			_, _, _ = syscall.RawSyscall(syscall.SYS_PRCTL, prSetDumpable, 0, 0)
 		}))
 }
-
