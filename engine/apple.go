@@ -29,7 +29,7 @@ type apple struct{}
 
 // localhostIP finds the "options localhost:<ip>" line in the resolver file.
 func localhostIP(resolver string) (string, bool) {
-	for _, l := range strings.Split(resolver, "\n") {
+	for l := range strings.SplitSeq(resolver, "\n") {
 		if f := strings.Fields(l); len(f) == 2 && f[0] == "options" {
 			if ip, ok := strings.CutPrefix(f[1], "localhost:"); ok && ip != "" {
 				return ip, true
