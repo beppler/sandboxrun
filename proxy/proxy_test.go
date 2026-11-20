@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bufio"
+	"context"
 	"net"
 	"net/http"
 	"strings"
@@ -17,7 +18,7 @@ func start(t *testing.T, allow ...string) string {
 	}
 	s := New(Config{Allow: allow, Logf: t.Logf})
 	go s.Serve(ln)
-	t.Cleanup(func() { s.Shutdown(nil) })
+	t.Cleanup(func() { s.Shutdown(context.Background()) })
 	return ln.Addr().String()
 }
 

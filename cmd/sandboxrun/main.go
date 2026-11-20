@@ -59,7 +59,6 @@ func main() { os.Exit(run()) }
 
 func run() int {
 	var allow, ports multi
-	rtName := flag.String("runtime", defaultRuntime(), "podman | apple | wslc")
 	image := flag.String("image", "", "container image")
 	helper := flag.String("helper", "", "path to a LINUX build of sandboxinit (podman, wslc); default: sandboxinit-linux-<arch> next to this binary")
 	uid := flag.Int("uid", 1000, "wslc: user the workload runs as")
@@ -96,7 +95,7 @@ func run() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	eng, err := engine.ForName(*rtName)
+	eng, err := engine.Default()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
@@ -173,19 +172,6 @@ func run() int {
 		fmt.Fprintln(os.Stderr, "run:", runErr)
 		return 1
 	}
-}
-
-func defaultRuntime() string {
-	switch runtime.GOOS {
-	case "darwin":
-		return "apple"
-	case "windows":
-		return "wslc"
-	case "linux":
-		return "podman"
-	}
-	// Other OSes are unsupported: ForName rejects the empty name.
-	return ""
 }
 
 // defaultHelper returns the make-built helper beside the executable, or "".
