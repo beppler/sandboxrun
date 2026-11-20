@@ -5,6 +5,14 @@ on:
     branches:
       - main
   pull_request:
+    # Re-run on label changes so the required "test" check reflects the
+    # current test-on-mac state (adding the label re-runs with macOS).
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+      - unlabeled
   # Opt-in extras: dispatch manually on a PR branch (Actions > Run workflow,
   # or `gh workflow run test.yml --ref <branch>`). inputs is empty on
   # push/pull_request, so those run the fast pair; dispatch can add macOS.
@@ -21,12 +29,14 @@ permissions:
 jobs:
   test-matrix:
     name: test-matrix (${{ matrix.os }})
+    # Ignore label events for labels other than test-on-mac.
+    if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' && github.event.action != 'unlabeled') || contains(github.event.pull_request.labels.*.name, 'test-on-mac') }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        # macOS is opt-in: tick "Also run on macOS" when dispatching manually.
-        os: ${{ fromJSON(inputs.macos && '["ubuntu-latest","windows-latest","macos-latest"]' || '["ubuntu-latest","windows-latest"]') }}
+        # macOS is opt-in: via the test-on-mac PR label, or the dispatch input.
+        os: ${{ ((github.event_name == 'workflow_dispatch' && inputs.macos) || contains(github.event.pull_request.labels.*.name, 'test-on-mac')) && '["ubuntu-latest","windows-latest","macos-latest"]' || '["ubuntu-latest","windows-latest"]' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -47,7 +57,7 @@ jobs:
   test:
     name: test
     needs: test-matrix
-    if: always()
+    if: ${{ always() && (github.event_name != 'pull_request' || (github.event.action != 'labeled' && github.event.action != 'unlabeled') || contains(github.event.pull_request.labels.*.name, 'test-on-mac')) }}
     runs-on: ubuntu-latest
     steps:
       - name: Require all matrix jobs to pass
