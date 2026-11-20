@@ -5,6 +5,14 @@ on:
     branches:
       - main
   pull_request:
+    # Re-run on label changes so the required "test" check reflects the
+    # current test-on-mac state (adding the label re-runs with macOS).
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+      - unlabeled
   # Opt-in extras: dispatch manually on a PR branch (Actions > Run workflow,
   # or `gh workflow run test.yml --ref <branch>`). inputs is empty on
   # push/pull_request, so those run the fast pair; dispatch can add macOS.
@@ -21,12 +29,16 @@ permissions:
 jobs:
   test-matrix:
     name: test-matrix (${{ matrix.os }})
+    # Ignore label events unless test-on-mac was added or removed: on
+    # 'labeled' the PR has the label; on 'unlabeled' only the event payload
+    # knows the removed label's name, so check github.event.label.name.
+    if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' && github.event.action != 'unlabeled') || contains(github.event.pull_request.labels.*.name, 'test-on-mac') || github.event.label.name == 'test-on-mac' }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        # macOS is opt-in: tick "Also run on macOS" when dispatching manually.
-        os: ${{ fromJSON(inputs.macos && '["ubuntu-latest","windows-latest","macos-latest"]' || '["ubuntu-latest","windows-latest"]') }}
+        # macOS is opt-in: via the test-on-mac PR label, or the dispatch input.
+        os: ${{ fromJSON(((github.event_name == 'workflow_dispatch' && inputs.macos) || contains(github.event.pull_request.labels.*.name, 'test-on-mac')) && '["ubuntu-latest","windows-latest","macos-latest"]' || '["ubuntu-latest","windows-latest"]') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -51,5 +63,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Require all matrix jobs to pass
-        if: needs.test-matrix.result != 'success'
+        if: needs.test-matrix.result == 'failure' || needs.test-matrix.result == 'cancelled'
         run: exit 1
