@@ -5,6 +5,7 @@ import (
 	"net"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -157,5 +158,33 @@ func TestLocalhostIP(t *testing.T) {
 	}
 	if _, ok := localhostIP("domain x\n"); ok {
 		t.Fatal("want not found")
+	}
+}
+
+func TestProxyEnv(t *testing.T) {
+	for _, e := range []Engine{podman{}, wslc{}} {
+		plan, err := e.Prepare(context.Background(), Spec{HelperPath: "/tmp/sandboxinit"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := strings.Join(plan.RunArgs, " ")
+		if !strings.Contains(got, "HTTP_PROXY=http://"+relayListen) {
+			t.Errorf("%T: HTTP_PROXY not set to the relay: %s", e, got)
+		}
+		for _, k := range []string{"NO_PROXY", "no_proxy"} {
+			if !strings.Contains(got, k+"=localhost,127.0.0.1,::1,[::1]") {
+				t.Errorf("%T: %s not set to loopback list: %s", e, k, got)
+			}
+		}
+	}
+}
+
+func TestWslcGuardListen(t *testing.T) {
+	plan, err := wslc{}.Prepare(context.Background(), Spec{HelperPath: "/tmp/sandboxinit"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(plan.Args, " "); !strings.Contains(got, "--listen "+relayListen+" ") {
+		t.Errorf("guard args missing --listen %s: %s", relayListen, got)
 	}
 }
