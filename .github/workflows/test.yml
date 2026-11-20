@@ -32,7 +32,7 @@ jobs:
     # Ignore label events unless test-on-mac was added or removed: on
     # 'labeled' the PR has the label; on 'unlabeled' only the event payload
     # knows the removed label's name, so check github.event.label.name.
-    if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' && github.event.action != 'unlabeled') || (github.event.action == 'labeled' && contains(github.event.pull_request.labels.*.name, 'test-on-mac')) || (github.event.action == 'unlabeled' && github.event.label.name == 'test-on-mac') }}
+    if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' && github.event.action != 'unlabeled') || contains(github.event.pull_request.labels.*.name, 'test-on-mac') || github.event.label.name == 'test-on-mac' }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -59,9 +59,9 @@ jobs:
   test:
     name: test
     needs: test-matrix
-    if: ${{ always() && (github.event_name != 'pull_request' || (github.event.action != 'labeled' && github.event.action != 'unlabeled') || (github.event.action == 'labeled' && contains(github.event.pull_request.labels.*.name, 'test-on-mac')) || (github.event.action == 'unlabeled' && github.event.label.name == 'test-on-mac')) }}
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Require all matrix jobs to pass
-        if: needs.test-matrix.result != 'success'
+        if: needs.test-matrix.result == 'failure' || needs.test-matrix.result == 'cancelled'
         run: exit 1
