@@ -13,15 +13,6 @@ on:
       - reopened
       - labeled
       - unlabeled
-  # Opt-in extras: dispatch manually on a PR branch (Actions > Run workflow,
-  # or `gh workflow run test.yml --ref <branch>`). inputs is empty on
-  # push/pull_request, so those run the fast pair; dispatch can add macOS.
-  workflow_dispatch:
-    inputs:
-      macos:
-        description: Also run on macOS (slow)
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -37,8 +28,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # macOS is opt-in: via the test-on-mac PR label, or the dispatch input.
-        os: ${{ fromJSON(((github.event_name == 'workflow_dispatch' && inputs.macos) || contains(github.event.pull_request.labels.*.name, 'test-on-mac')) && '["ubuntu-latest","windows-latest","macos-latest"]' || '["ubuntu-latest","windows-latest"]') }}
+        # macOS is opt-in via the test-on-mac PR label.
+        os: ${{ fromJSON(contains(github.event.pull_request.labels.*.name, 'test-on-mac') && '["ubuntu-latest","windows-latest","macos-latest"]' || '["ubuntu-latest","windows-latest"]') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
