@@ -43,7 +43,12 @@ Chosen automatically by OS.
 - **podman** (Linux): container has no network; `sandboxinit relay` forwards
   TCP to the proxy over a Unix socket.
 - **apple** (macOS): container runs on a host-only network; the proxy listens
-  on the network gateway.
+  on the host's loopback and is reached at the IP that the DNS entry maps to localhost. Required one-time
+  setup: `sudo container system dns create --localhost 203.0.113.113 host.container.internal`.
+  Without it (no `localhost:<ip>` option in
+  `/etc/resolver/containerization.host.container.internal`) sandboxrun refuses to start.
+  **Known limitation:** the container can reach every port listening on the
+  host's loopback (databases, dev servers), not only the proxy.
 - **wslc** (Windows): proxy binds on the host's loopback (`127.0.0.1`); the
   workload runs in an empty network namespace as `-uid`/`-gid`.
 

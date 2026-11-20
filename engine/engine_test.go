@@ -150,3 +150,12 @@ func TestDefault(t *testing.T) {
 		t.Fatalf("Default() = %T, %v; want %T", got, err, want)
 	}
 }
+
+func TestLocalhostIP(t *testing.T) {
+	if ip, ok := localhostIP("domain host.container.internal\nsearch host.container.internal\nnameserver 127.0.0.1\nport 1053\noptions localhost:203.0.113.113\n"); !ok || ip != "203.0.113.113" {
+		t.Fatalf("got %q, %v", ip, ok)
+	}
+	if _, ok := localhostIP("domain x\n"); ok {
+		t.Fatal("want not found")
+	}
+}

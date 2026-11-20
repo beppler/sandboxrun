@@ -3,64 +3,77 @@ package engine
 import (
 	"context"
 	"fmt"
-	"math/rand/v2"
 	"net"
 	"os"
 	"os/exec"
 	"strings"
-	"time"
 )
 
 // apple (macOS 26): the container joins a host-only (--internal) vmnet
-// network. It can reach the host and nothing else; the host proxy listens on
-// the network's gateway address.
+// network and reaches the host proxy, which listens on host loopback, at the
+// address that a one-time, administrator-only DNS entry maps to localhost (we
+// never run sudo ourselves). The proxy URL uses that IP directly: --add-host is
+// not available. The address is read from appleResolver; if it is missing,
+// Prepare fails. Create the entry with:
 //
-// ASSUMPTIONS to verify on your machine:
-//   - the gateway is the first host address of the subnet we choose (.1).
-//     Confirm with `container network inspect <name>` and adjust if not.
-//   - the vmnet bridge only exists once a container is attached, so the
-//     listener is created lazily (retrying) after the container starts.
+//	sudo container system dns create --localhost 203.0.113.113 host.container.internal
 //
-// Hardening still to do on the host: a pf rule on the bridge allowing only
-// <gateway>:<port>, since host-only mode exposes ALL host ports on that IP.
+// Known limitation: every port listening on the host's loopback is reachable
+// from the container, not only the proxy.
+const (
+	appleHost     = "host.container.internal"
+	appleResolver = "/etc/resolver/containerization." + appleHost
+)
+
 type apple struct{}
+
+// localhostIP finds the "options localhost:<ip>" line in the resolver file.
+func localhostIP(resolver string) (string, bool) {
+	for _, l := range strings.Split(resolver, "\n") {
+		if f := strings.Fields(l); len(f) == 2 && f[0] == "options" {
+			if ip, ok := strings.CutPrefix(f[1], "localhost:"); ok && ip != "" {
+				return ip, true
+			}
+		}
+	}
+	return "", false
+}
 
 func (apple) Prepare(ctx context.Context, s Spec) (*Plan, error) {
 	va, err := volumeArgs(s.Volumes, false)
 	if err != nil {
 		return nil, err
 	}
-	port := s.ProxyPort
-	if port == 0 {
-		port = 18080
+	b, err := os.ReadFile(appleResolver)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
 	}
-	// Only ~200 subnets, so a collision with a leftover network is possible;
-	// pick a fresh subnet and retry before giving up.
-	var name, subnet, gateway string
-	for i := 0; ; i++ {
-		third := 16 + rand.IntN(200)
-		subnet = fmt.Sprintf("10.77.%d.0/24", third)
-		gateway = fmt.Sprintf("10.77.%d.1", third)
-		name = fmt.Sprintf("sandbox-%d-%d", os.Getpid(), rand.IntN(1<<16))
-		out, err := exec.CommandContext(ctx, "container", "network", "create",
-			"--internal", "--subnet", subnet, name).CombinedOutput()
-		if err == nil {
-			break
-		}
-		if i == 2 {
-			return nil, fmt.Errorf("container network create (subnet clash with a leftover network? tried 3 subnets): %v: %s",
-				err, strings.TrimSpace(string(out)))
-		}
+	ip, ok := localhostIP(string(b))
+	if !ok {
+		return nil, fmt.Errorf("DNS entry not configured (no localhost:<ip> option in %s); run once: sudo container system dns create --localhost 203.0.113.113 %s", appleResolver, appleHost)
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return nil, err
 	}
 
-	addr := net.JoinHostPort(gateway, fmt.Sprint(port))
+	port := ln.Addr().(*net.TCPAddr).Port
+	name := s.Name
+	if name == "" {
+		name = fmt.Sprintf("sandbox-%d", os.Getpid())
+	}
+	if o, err := exec.CommandContext(ctx, "container", "network", "create", "--internal", name).CombinedOutput(); err != nil {
+		ln.Close()
+		return nil, fmt.Errorf("container network create: %v: %s (if a leftover network from a killed run exists, remove it with: container network delete %s)", err, strings.TrimSpace(string(o)), name)
+	}
+
 	args := []string{
 		"--progress", "none",
 		"--rm",
 		"--network", name,
 	}
 	args = append(args, va...)
-	args = append(args, proxyEnv("http://"+addr)...)
+	args = append(args, proxyEnv("http://"+net.JoinHostPort(ip, fmt.Sprint(port)))...)
 	if s.Interactive {
 		args = append(args, "-it")
 	}
@@ -69,23 +82,10 @@ func (apple) Prepare(ctx context.Context, s Spec) (*Plan, error) {
 	}
 
 	return &Plan{
-		Prefix:  []string{"container", "run"},
-		RunArgs: args,
-		Args:    s.Cmd,
-		ListenLate: func(ctx context.Context) (net.Listener, error) {
-			t := time.NewTicker(100 * time.Millisecond)
-			defer t.Stop()
-			for {
-				if ln, err := net.Listen("tcp", addr); err == nil {
-					return ln, nil
-				}
-				select {
-				case <-ctx.Done():
-					return nil, ctx.Err()
-				case <-t.C:
-				}
-			}
-		},
+		Prefix:   []string{"container", "run"},
+		RunArgs:  args,
+		Args:     s.Cmd,
+		Listener: ln,
 		Cleanup: func() {
 			_ = exec.Command("container", "network", "delete", name).Run()
 		},

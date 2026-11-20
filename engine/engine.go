@@ -89,9 +89,6 @@ type Spec struct {
 
 	// wslc: unprivileged user the workload is dropped to inside the container.
 	UID, GID int
-
-	// apple: proxy port on the host-only network gateway.
-	ProxyPort int
 }
 
 // Plan describes how to launch the container and where the proxy must listen.
