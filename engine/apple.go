@@ -2,10 +2,13 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -18,8 +21,9 @@ import (
 //
 //	sudo container system dns create --localhost 203.0.113.113 host.container.internal
 //
-// Known limitation: every port listening on the host's loopback is reachable
-// from the container, not only the proxy.
+// sandboxinit guard --firewall locks the container down with nftables:
+// default-drop output, allow only loopback, established connections, the host
+// proxy port and DNS. The base image must ship nft.
 const (
 	appleHost     = "host.container.internal"
 	appleResolver = "/etc/resolver/containerization." + appleHost
@@ -40,6 +44,13 @@ func localhostIP(resolver string) (string, bool) {
 }
 
 func (apple) Prepare(ctx context.Context, s Spec) (*Plan, error) {
+	if s.HelperPath == "" {
+		return nil, errors.New("apple: -helper (Linux sandboxinit binary) is required")
+	}
+	helper, err := filepath.Abs(s.HelperPath)
+	if err != nil {
+		return nil, err
+	}
 	va, err := volumeArgs(s.Volumes, false)
 	if err != nil {
 		return nil, err
@@ -67,10 +78,17 @@ func (apple) Prepare(ctx context.Context, s Spec) (*Plan, error) {
 		return nil, fmt.Errorf("container network create: %v: %s (if a leftover network from a killed run exists, remove it with: container network delete %s)", err, strings.TrimSpace(string(o)), name)
 	}
 
+	uid, gid := s.UID, s.GID
+	if uid == 0 {
+		uid, gid = 1000, 1000
+	}
+
 	args := []string{
-		"--progress", "none",
 		"--rm",
-		"--network", name,
+		"--cap-add", "NET_ADMIN", // guard installs the nftables lockdown
+		"--user", "0",
+		"-v", helper + ":/sandboxinit:ro",
+		"--entrypoint", "/sandboxinit",
 	}
 	args = append(args, va...)
 	args = append(args, proxyEnv("http://"+net.JoinHostPort(ip, fmt.Sprint(port)))...)
@@ -81,10 +99,21 @@ func (apple) Prepare(ctx context.Context, s Spec) (*Plan, error) {
 		args = append(args, "--name", s.Name)
 	}
 
+	post := []string{
+		"guard",
+		"--host", ip,
+		"--port", strconv.Itoa(port),
+		"--firewall",
+		"--uid", strconv.Itoa(uid),
+		"--gid", strconv.Itoa(gid),
+		"--",
+	}
+	post = append(post, s.Cmd...)
+
 	return &Plan{
 		Prefix:   []string{"container", "run"},
 		RunArgs:  args,
-		Args:     s.Cmd,
+		Args:     post,
 		Listener: ln,
 		Cleanup: func() {
 			_ = exec.Command("container", "network", "delete", name).Run()
