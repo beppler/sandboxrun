@@ -60,9 +60,9 @@ func main() { os.Exit(run()) }
 func run() int {
 	var allow, ports multi
 	image := flag.String("image", "", "container image")
-	helper := flag.String("helper", "", "path to a LINUX build of sandboxinit (podman, wslc); default: sandboxinit-linux-<arch> next to this binary")
-	uid := flag.Int("uid", 1000, "wslc: user the workload runs as")
-	gid := flag.Int("gid", 1000, "wslc: group the workload runs as")
+	helper := flag.String("helper", "", "path to a LINUX build of sandboxinit (podman, wslc, apple); default: sandboxinit-linux-<arch> next to this binary")
+	uid := flag.Int("uid", 1000, "wslc, apple: user the workload runs as inside the container")
+	gid := flag.Int("gid", 1000, "wslc, apple: group the workload runs as inside the container")
 	tty := flag.Bool("it", false, "interactive TTY")
 	name := flag.String("name", "", "container name (optional)")
 	volumes := volumeFlag{}

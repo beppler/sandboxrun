@@ -21,10 +21,10 @@ sandboxrun -allow google.com -allow "*.google.com" -image alpine -- wget -q -S -
 | `-port PORT` | Allowed destination port, repeatable (default: 80, 443) |
 | `-image IMG` | Container image |
 | `-name NAME` | Optional container name, passed to the runtime as `--name` |
-| `-helper PATH` | Path to a Linux build of `sandboxinit` (podman, wslc). Default: `sandboxinit-linux-<arch>` next to the `sandboxrun` binary |
+| `-helper PATH` | Path to a Linux build of `sandboxinit` (podman, wslc, apple). Default: `sandboxinit-linux-<arch>` next to the `sandboxrun` binary |
 | `-volume HOST:CTR[:rw]` | Mount a host path into the container, repeatable; default read-only, add `:rw` for read-write |
 | `-it` | Interactive TTY |
-| `-uid` / `-gid` | wslc: user the workload runs as inside the container (default 1000) |
+| `-uid` / `-gid` | wslc, apple: user the workload runs as inside the container (default 1000) |
 | `-log DEST` | Proxy log: empty = off, `-` = stderr, otherwise a file path |
 
 ## How it works
@@ -47,8 +47,9 @@ Chosen automatically by OS.
   setup: `sudo container system dns create --localhost 203.0.113.113 host.container.internal`.
   Without it (no `localhost:<ip>` option in
   `/etc/resolver/containerization.host.container.internal`) sandboxrun refuses to start.
-  **Known limitation:** the container can reach every port listening on the
-  host's loopback (databases, dev servers), not only the proxy.
+  `sandboxinit guard --firewall` locks the container down with nftables:
+  default-drop output, only loopback, established connections, the proxy port
+  and DNS are allowed. The base image must ship `nft`.
 - **wslc** (Windows): proxy binds on the host's loopback (`127.0.0.1`); the
   workload runs in an empty network namespace as `-uid`/`-gid`.
 
