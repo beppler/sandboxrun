@@ -41,9 +41,8 @@ Two layers of defence in the proxy:
 Chosen automatically by OS.
 
 - **podman** (Linux): container has no network; `sandboxinit relay` forwards
-  TCP to the proxy over a Unix socket. Runs as your own user (`--userns=keep-id`),
-  not root: images that write to root-owned paths or expect a fixed uid (e.g.
-  1000) may fail. `-uid`/`-gid` are ignored.
+  TCP to the proxy over a Unix socket. Runs as container root, which rootless
+  podman maps to your own user (no extra host privilege). `-uid`/`-gid` are ignored.
 - **apple** (macOS): container runs on a host-only network; the proxy listens
   on the host's loopback and is reached at the IP that the DNS entry maps to localhost. Required one-time
   setup: `sudo container system dns create --localhost 203.0.113.113 host.container.internal`.

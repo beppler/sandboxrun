@@ -13,9 +13,9 @@ import (
 // container; the helper (sandboxinit relay) exposes it as 127.0.0.1:3128
 // inside the container and then runs the real command.
 //
-// --userns=keep-id runs the relay and the workload as the host user (same
-// uid/gid inside), so no privilege drop happens in sandboxinit and the 0700
-// socket dir and volumes stay accessible. Don't add --user.
+// Rootless note: the host user maps to container root, so the relay (and the
+// workload) run as that same user. Don't use --user with a different uid
+// unless you also add --userns=keep-id.
 type podman struct{}
 
 const (
@@ -51,7 +51,6 @@ func (podman) Prepare(_ context.Context, s Spec) (*Plan, error) {
 	args := []string{
 		"--rm", "--init",
 		"--network", "none",
-		"--userns", "keep-id",
 		"--cap-drop", "all",
 		"--security-opt", "no-new-privileges",
 		// ",z" relabels for SELinux hosts; harmless elsewhere.

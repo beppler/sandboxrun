@@ -196,7 +196,7 @@ func TestPodmanUserns(t *testing.T) {
 	}
 	defer plan.Cleanup()
 	run := strings.Join(plan.RunArgs, " ")
-	if !strings.Contains(run, "--userns keep-id") || strings.Contains(run, "--user ") {
-		t.Errorf("want --userns keep-id and no --user: %s", run)
+	if strings.Contains(run, "--userns") || strings.Contains(run, "--user ") {
+		t.Errorf("want no --userns and no --user: %s", run)
 	}
 }
