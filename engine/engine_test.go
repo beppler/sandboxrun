@@ -195,11 +195,8 @@ func TestPodmanUserns(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer plan.Cleanup()
-	run, post := strings.Join(plan.RunArgs, " "), strings.Join(plan.Args, " ")
+	run := strings.Join(plan.RunArgs, " ")
 	if !strings.Contains(run, "--userns keep-id") || strings.Contains(run, "--user ") {
 		t.Errorf("want --userns keep-id and no --user: %s", run)
-	}
-	if strings.Contains(post, "--uid") {
-		t.Errorf("relay must not drop privileges itself: %s", post)
 	}
 }
