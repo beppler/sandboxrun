@@ -41,7 +41,7 @@ Two layers of defence in the proxy:
 Chosen automatically by OS.
 
 - **podman** (Linux): container has no network; `sandboxinit relay` forwards
-  TCP to the proxy over a Unix socket.
+  TCP to the proxy over a Unix socket. Runs as your own user (`--userns=keep-id`).
 - **apple** (macOS): container runs on a host-only network; the proxy listens
   on the host's loopback and is reached at the IP that the DNS entry maps to localhost. Required one-time
   setup: `sudo container system dns create --localhost 203.0.113.113 host.container.internal`.

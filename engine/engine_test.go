@@ -188,3 +188,18 @@ func TestWslcGuardListen(t *testing.T) {
 		t.Errorf("guard args missing --listen %s: %s", relayListen, got)
 	}
 }
+
+func TestPodmanUserns(t *testing.T) {
+	plan, err := podman{}.Prepare(context.Background(), Spec{HelperPath: "/tmp/sandboxinit", Cmd: []string{"true"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer plan.Cleanup()
+	run, post := strings.Join(plan.RunArgs, " "), strings.Join(plan.Args, " ")
+	if !strings.Contains(run, "--userns keep-id") || strings.Contains(run, "--user ") {
+		t.Errorf("want --userns keep-id and no --user: %s", run)
+	}
+	if strings.Contains(post, "--uid") {
+		t.Errorf("relay must not drop privileges itself: %s", post)
+	}
+}
