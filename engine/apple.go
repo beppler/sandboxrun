@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 )
 
@@ -21,13 +20,12 @@ import (
 //
 //	sudo container system dns create --localhost 203.0.113.113 host.container.internal
 //
-// sandboxinit guard --firewall locks the container down with nftables:
-// default-drop output, allow only loopback, established connections, the host
-// proxy port and DNS. The base image must ship nft.
-const (
-	appleHost     = "host.container.internal"
-	appleResolver = "/etc/resolver/containerization." + appleHost
-)
+// Like wslc, sandboxinit guard runs the workload in an empty network namespace
+// (only lo); a relay there reaches ip:proxyPort through a unix socket. No
+// firewall tool is needed in the image.
+const appleHost = "host.container.internal"
+
+var appleResolver = "/etc/resolver/containerization." + appleHost // var: tests point it at a temp file
 
 type apple struct{}
 
@@ -78,42 +76,11 @@ func (apple) Prepare(ctx context.Context, s Spec) (*Plan, error) {
 		return nil, fmt.Errorf("container network create: %v: %s (if a leftover network from a killed run exists, remove it with: container network delete %s)", err, strings.TrimSpace(string(o)), name)
 	}
 
-	uid, gid := s.UID, s.GID
-	if uid == 0 {
-		uid, gid = 1000, 1000
-	}
-
-	args := []string{
-		"--rm",
-		"--cap-add", "NET_ADMIN", // guard installs the nftables lockdown
-		"--user", "0",
-		"-v", helper + ":/sandboxinit:ro",
-		"--entrypoint", "/sandboxinit",
-	}
-	args = append(args, va...)
-	args = append(args, proxyEnv("http://"+net.JoinHostPort(ip, fmt.Sprint(port)))...)
-	if s.Interactive {
-		args = append(args, "-it")
-	}
-	if s.Name != "" {
-		args = append(args, "--name", s.Name)
-	}
-
-	post := []string{
-		"guard",
-		"--host", ip,
-		"--port", strconv.Itoa(port),
-		"--firewall",
-		"--uid", strconv.Itoa(uid),
-		"--gid", strconv.Itoa(gid),
-		"--",
-	}
-	post = append(post, s.Cmd...)
-
+	runArgs, args := guardRun(s, helper, va, ip, port)
 	return &Plan{
 		Prefix:   []string{"container", "run"},
-		RunArgs:  args,
-		Args:     post,
+		RunArgs:  append(runArgs, "--network", name), // host-only: even the root forwarder reaches only the host
+		Args:     args,
 		Listener: ln,
 		Cleanup: func() {
 			_ = exec.Command("container", "network", "delete", name).Run()

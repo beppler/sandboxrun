@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net"
 	"path/filepath"
-	"strconv"
 )
 
 // wslc (Windows): no host-only network mode was found, so the container keeps
@@ -46,45 +45,13 @@ func (wslc) Prepare(_ context.Context, s Spec) (*Plan, error) {
 	}
 	port := ln.Addr().(*net.TCPAddr).Port
 
-	uid, gid := s.UID, s.GID
-	if uid == 0 {
-		uid, gid = 1000, 1000
-	}
-
-	args := []string{
-		"--rm",
-		"--cap-add", "SYS_ADMIN", // CLONE_NEWNET
-		"--cap-add", "NET_ADMIN", // bring lo up in the new netns
-		"--user", "0",
-		"-v", helper + ":/sandboxinit:ro",
-		"--entrypoint", "/sandboxinit",
-	}
-	args = append(args, va...)
-	args = append(args, proxyEnv("http://"+relayListen)...)
-	if s.Interactive {
-		args = append(args, "-it")
-	}
-	if s.Name != "" {
-		args = append(args, "--name", s.Name)
-	}
-
 	// The container's default gateway is only the VM's bridge, not Windows;
 	// wslc exposes the Windows host as host.wslc.internal.
-	post := []string{
-		"guard",
-		"--host", "host.wslc.internal",
-		"--port", strconv.Itoa(port),
-		"--listen", relayListen,
-		"--uid", strconv.Itoa(uid),
-		"--gid", strconv.Itoa(gid),
-		"--",
-	}
-	post = append(post, s.Cmd...)
-
+	runArgs, args := guardRun(s, helper, va, "host.wslc.internal", port)
 	return &Plan{
 		Prefix:   []string{"wslc", "container", "run"},
-		RunArgs:  args,
-		Args:     post,
+		RunArgs:  runArgs,
+		Args:     args,
 		Listener: ln,
 		Cleanup:  func() { ln.Close() },
 	}, nil

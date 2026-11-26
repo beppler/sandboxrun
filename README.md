@@ -47,9 +47,8 @@ Chosen automatically by OS.
   setup: `sudo container system dns create --localhost 203.0.113.113 host.container.internal`.
   Without it (no `localhost:<ip>` option in
   `/etc/resolver/containerization.host.container.internal`) sandboxrun refuses to start.
-  `sandboxinit guard --firewall` locks the container down with nftables:
-  default-drop output, only loopback, established connections, the proxy port
-  and DNS are allowed. The base image must ship `nft`.
+  As on wslc, the workload runs in an empty network namespace as `-uid`/`-gid`;
+  its only way out is a relay to the host proxy. No firewall tool is needed in the image.
 - **wslc** (Windows): proxy binds on the host's loopback (`127.0.0.1`); the
   workload runs in an empty network namespace as `-uid`/`-gid`.
 
