@@ -3,14 +3,10 @@
 // sandboxinit is the tiny static helper that runs INSIDE the container.
 //
 //	relay  --sock S --listen A [--uid U --gid G] -- cmd...   TCP A -> unix socket S
-//	guard  --host H --port P --listen A --uid U --gid G -- cmd   (wslc) runs cmd in an empty network
+//	guard  --host H --port P --listen A --uid U --gid G -- cmd   (wslc, apple) runs cmd in an empty network
 //	       namespace (only lo); a relay inside reaches the host proxy through a
 //	       unix socket that the parent, still in the container's netns, forwards
-//	       to gateway:P. No firewall tool needed in the image.
-//	guard --host H --port P --firewall --uid U --gid G -- cmd   (apple) installs a
-//	       nftables default-drop ruleset allowing only loopback, established
-//	       connections, the host proxy port and DNS, then drops privileges and
-//	       execs the workload in place. Requires nft in the image.
+//	       to H:P. No firewall tool needed in the image.
 package main
 
 import (
@@ -23,7 +19,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
 	"unsafe"
@@ -192,15 +187,8 @@ func guard(args []string) {
 	gid := fs.Int("gid", 1000, "gid to drop to")
 	host := fs.String("host", "", "host proxy address")
 	listen := fs.String("listen", "", "loopback address of the relay in the workload's netns")
-	firewall := fs.Bool("firewall", false, "nftables lockdown instead of a network namespace (apple)")
 	_ = fs.Parse(args)
 	cmd := fs.Args()
-	if *firewall {
-		if *host == "" {
-			die("guard: --firewall requires --host")
-		}
-		firewallGuard(*host, strconv.Itoa(*port), *uid, *gid, cmd) // exits
-	}
 	if *port == 0 || *host == "" || *listen == "" || len(cmd) == 0 {
 		die("guard: --port, --host, --listen and a command are required")
 	}
@@ -232,56 +220,4 @@ func guard(args []string) {
 			const prSetDumpable = 4
 			_, _, _ = syscall.RawSyscall(syscall.SYS_PRCTL, prSetDumpable, 0, 0)
 		}))
-}
-
-// firewallGuard (apple) installs a default-drop nftables ruleset allowing only
-// loopback, established connections, the host proxy and DNS, then drops
-// privileges and execs the workload in place.
-func firewallGuard(host, port string, uid, gid int, cmd []string) {
-	b, err := os.ReadFile("/etc/resolv.conf")
-	if err != nil && !os.IsNotExist(err) {
-		die("guard: " + err.Error())
-	}
-	rules := nftRules(host, port, nameservers(string(b)))
-	nft := exec.Command("nft", "-f", "-")
-	nft.Stdin = strings.NewReader(rules)
-	nft.Stderr = os.Stderr
-	if err := nft.Run(); err != nil {
-		die("guard: installing nftables rules failed (is nft in the image? NET_ADMIN granted?): " + err.Error())
-	}
-	dropPrivs(uid, gid)
-	path, err := exec.LookPath(cmd[0])
-	if err != nil {
-		die("guard: " + err.Error())
-	}
-	die("guard: exec: " + syscall.Exec(path, cmd, os.Environ()).Error())
-}
-
-// nftRules builds the ruleset: default-drop output, allow loopback,
-// established connections, the host proxy and DNS to the nameservers.
-func nftRules(host, port string, nss []string) string {
-	var b strings.Builder
-	b.WriteString(`table inet sandbox {
-  chain output {
-    type filter hook output priority 0; policy drop;
-    oif "lo" accept
-    ct state established,related accept
-`)
-	fmt.Fprintf(&b, "    ip daddr %s tcp dport %s accept\n", host, port)
-	for _, ns := range nss {
-		fmt.Fprintf(&b, "    ip daddr %s udp dport 53 accept\n    ip daddr %s tcp dport 53 accept\n", ns, ns)
-	}
-	b.WriteString("  }\n}\n")
-	return b.String()
-}
-
-// nameservers parses "nameserver" lines from a resolv.conf.
-func nameservers(resolv string) []string {
-	var ns []string
-	for l := range strings.SplitSeq(resolv, "\n") {
-		if f := strings.Fields(l); len(f) == 2 && f[0] == "nameserver" {
-			ns = append(ns, f[1])
-		}
-	}
-	return ns
 }

@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"net"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -186,5 +187,36 @@ func TestWslcGuardListen(t *testing.T) {
 	}
 	if got := strings.Join(plan.Args, " "); !strings.Contains(got, "--listen "+relayListen+" ") {
 		t.Errorf("guard args missing --listen %s: %s", relayListen, got)
+	}
+}
+
+// apple must run the workload behind guard on its host-only network.
+func TestAppleGuardArgs(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake `container` is a shell script")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "container"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	appleResolver = filepath.Join(dir, "resolver")
+	t.Cleanup(func() { appleResolver = "/etc/resolver/containerization." + appleHost })
+	if err := os.WriteFile(appleResolver, []byte("options localhost:203.0.113.113\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := apple{}.Prepare(context.Background(), Spec{Name: "sb", HelperPath: "/tmp/sandboxinit", Cmd: []string{"true"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer plan.Listener.Close()
+	run, args := strings.Join(plan.RunArgs, " "), strings.Join(plan.Args, " ")
+	for _, want := range []string{"--network sb", "--cap-add SYS_ADMIN", "--cap-add NET_ADMIN", "HTTP_PROXY=http://" + relayListen} {
+		if !strings.Contains(run, want) {
+			t.Errorf("RunArgs missing %q: %s", want, run)
+		}
+	}
+	if !strings.HasPrefix(args, "guard --host 203.0.113.113 ") || !strings.Contains(args, "--listen "+relayListen+" ") {
+		t.Errorf("guard args wrong: %s", args)
 	}
 }

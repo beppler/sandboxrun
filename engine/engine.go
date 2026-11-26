@@ -84,10 +84,10 @@ type Spec struct {
 	Interactive bool
 	Volumes     []Volume
 
-	// HelperPath: a *Linux* build of cmd/sandboxinit (podman, wslc).
+	// HelperPath: a *Linux* build of cmd/sandboxinit (podman, wslc, apple).
 	HelperPath string
 
-	// wslc: unprivileged user the workload is dropped to inside the container.
+	// wslc, apple: unprivileged user the workload is dropped to inside the container.
 	UID, GID int
 }
 
