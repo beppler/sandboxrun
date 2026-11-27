@@ -201,7 +201,7 @@ func TestApplePodmanStyle(t *testing.T) {
 			t.Errorf("RunArgs contains %q: %s", bad, run)
 		}
 	}
-	if !strings.HasPrefix(args, "relay --sock "+appleSock+" --listen "+relayListen+" ") {
+	if !strings.HasPrefix(args, "relay --sock "+containerSock+" --listen "+relayListen+" ") {
 		t.Errorf("relay args wrong: %s", args)
 	}
 }

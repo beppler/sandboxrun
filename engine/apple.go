@@ -13,10 +13,6 @@ import (
 
 type apple struct{}
 
-// appleSock: where the proxy socket is mounted inside the container. /tmp
-// exists in every image, and a file mount needs an existing parent dir.
-const appleSock = "/tmp/sandbox-proxy.sock"
-
 func (apple) Prepare(_ context.Context, s Spec) (*Plan, error) {
 	if s.HelperPath == "" {
 		return nil, errors.New("apple: -helper (Linux sandboxinit binary) is required")
@@ -35,7 +31,7 @@ func (apple) Prepare(_ context.Context, s Spec) (*Plan, error) {
 	}
 	// The socket must be connectable from inside the VM, where the mounted
 	// file's owner may not map to our host user: world-writable it is.
-	sockPath := filepath.Join(dir, podmanSockName)
+	sockPath := filepath.Join(dir, proxySockName)
 	_ = os.Chmod(sockPath, 0o666) // virtiofs owner mapping in the VM is unknown
 	runArgs := []string{
 		"--rm",
@@ -47,11 +43,11 @@ func (apple) Prepare(_ context.Context, s Spec) (*Plan, error) {
 		// Mount the socket file itself, read-write (like /var/run/docker.sock):
 		// apple's virtiofs proxies unix sockets this way; a :ro directory mount
 		// failed with EOPNOTSUPP on connect.
-		"-v", sockPath + ":" + appleSock,
+		"-v", sockPath + ":" + containerSock,
 		"--entrypoint", "/sandboxinit",
 	}
 	runArgs = commonRunArgs(runArgs, s, va)
-	args := []string{"relay", "--sock", appleSock, "--listen", relayListen, "--"}
+	args := []string{"relay", "--sock", containerSock, "--listen", relayListen, "--"}
 	args = append(args, s.Cmd...)
 
 	return &Plan{

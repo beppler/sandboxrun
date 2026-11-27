@@ -17,11 +17,7 @@ import (
 // unless you also add --userns=keep-id and run as your own uid.
 type podman struct{}
 
-const (
-	podmanSockDir  = "/run/sandbox"
-	podmanSockName = "proxy.sock"
-	relayListen    = "127.0.0.1:3128"
-)
+const relayListen = "127.0.0.1:3128"
 
 func (podman) Prepare(_ context.Context, s Spec) (*Plan, error) {
 	if s.HelperPath == "" {
@@ -47,7 +43,7 @@ func (podman) Prepare(_ context.Context, s Spec) (*Plan, error) {
 		"--security-opt", "no-new-privileges",
 		// ",z" relabels for SELinux hosts; harmless elsewhere.
 		"-v", helper + ":/sandboxinit:ro,z",
-		"-v", dir + ":" + podmanSockDir + ":z",
+		"-v", filepath.Join(dir, proxySockName) + ":" + containerSock + ":z",
 		"--entrypoint", "/sandboxinit",
 	}
 	args = append(args, va...)
@@ -59,7 +55,7 @@ func (podman) Prepare(_ context.Context, s Spec) (*Plan, error) {
 		args = append(args, "--name", s.Name)
 	}
 
-	post := []string{"relay", "--sock", podmanSockDir + "/" + podmanSockName, "--listen", relayListen, "--"}
+	post := []string{"relay", "--sock", containerSock, "--listen", relayListen, "--"}
 	post = append(post, s.Cmd...)
 
 	return &Plan{
