@@ -6,8 +6,6 @@
 //	guard  --host H --port P --listen A --uid U --gid G -- cmd   (wslc) runs cmd in an empty
 //	       network namespace (only lo); a relay inside reaches the host proxy through a
 //	       unix socket that the parent, still in the container's netns, forwards to H:P.
-//	       No firewall tool needed in the image.
-//	       (apple needs none of this: its socket is bind-mounted, podman needs no guard either.)
 package main
 
 import (
