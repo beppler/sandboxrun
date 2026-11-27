@@ -87,7 +87,7 @@ type Spec struct {
 	// HelperPath: a *Linux* build of cmd/sandboxinit (podman, wslc, apple).
 	HelperPath string
 
-	// wslc, apple: unprivileged user the workload is dropped to inside the container.
+	// wslc: unprivileged user the workload is dropped to inside the container.
 	UID, GID int
 }
 
@@ -123,6 +123,20 @@ func Default() (Engine, error) {
 		return podman{}, nil
 	}
 	return nil, fmt.Errorf("unsupported OS %q", runtime.GOOS)
+}
+
+// commonRunArgs appends the run flags wslc and apple share after their
+// engine-specific base: volumes, proxy env, interactive TTY, container name.
+func commonRunArgs(runArgs []string, s Spec, va []string) []string {
+	runArgs = append(runArgs, va...)
+	runArgs = append(runArgs, proxyEnv("http://"+relayListen)...)
+	if s.Interactive {
+		runArgs = append(runArgs, "-it")
+	}
+	if s.Name != "" {
+		runArgs = append(runArgs, "--name", s.Name)
+	}
+	return runArgs
 }
 
 func proxyEnv(url string) []string {

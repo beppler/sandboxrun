@@ -3,7 +3,6 @@ package engine
 import (
 	"context"
 	"errors"
-	"net"
 	"os"
 	"path/filepath"
 )
@@ -18,11 +17,7 @@ import (
 // unless you also add --userns=keep-id and run as your own uid.
 type podman struct{}
 
-const (
-	podmanSockDir  = "/run/sandbox"
-	podmanSockName = "proxy.sock"
-	relayListen    = "127.0.0.1:3128"
-)
+const relayListen = "127.0.0.1:3128"
 
 func (podman) Prepare(_ context.Context, s Spec) (*Plan, error) {
 	if s.HelperPath == "" {
@@ -36,17 +31,10 @@ func (podman) Prepare(_ context.Context, s Spec) (*Plan, error) {
 	if err != nil {
 		return nil, err
 	}
-	dir, err := os.MkdirTemp("", "sandbox-") // created 0700
+	dir, ln, err := unixSocketListener()
 	if err != nil {
 		return nil, err
 	}
-	sock := filepath.Join(dir, podmanSockName)
-	ln, err := net.Listen("unix", sock)
-	if err != nil {
-		os.RemoveAll(dir)
-		return nil, err
-	}
-	_ = os.Chmod(sock, 0o600)
 
 	args := []string{
 		"--rm", "--init",
@@ -55,7 +43,7 @@ func (podman) Prepare(_ context.Context, s Spec) (*Plan, error) {
 		"--security-opt", "no-new-privileges",
 		// ",z" relabels for SELinux hosts; harmless elsewhere.
 		"-v", helper + ":/sandboxinit:ro,z",
-		"-v", dir + ":" + podmanSockDir + ":z",
+		"-v", filepath.Join(dir, proxySockName) + ":" + podmanSock + ":z",
 		"--entrypoint", "/sandboxinit",
 	}
 	args = append(args, va...)
@@ -67,7 +55,7 @@ func (podman) Prepare(_ context.Context, s Spec) (*Plan, error) {
 		args = append(args, "--name", s.Name)
 	}
 
-	post := []string{"relay", "--sock", podmanSockDir + "/" + podmanSockName, "--listen", relayListen, "--"}
+	post := []string{"relay", "--sock", podmanSock, "--listen", relayListen, "--"}
 	post = append(post, s.Cmd...)
 
 	return &Plan{

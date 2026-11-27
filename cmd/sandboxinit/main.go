@@ -3,10 +3,9 @@
 // sandboxinit is the tiny static helper that runs INSIDE the container.
 //
 //	relay  --sock S --listen A [--uid U --gid G] -- cmd...   TCP A -> unix socket S
-//	guard  --host H --port P --listen A --uid U --gid G -- cmd   (wslc, apple) runs cmd in an empty network
-//	       namespace (only lo); a relay inside reaches the host proxy through a
-//	       unix socket that the parent, still in the container's netns, forwards
-//	       to H:P. No firewall tool needed in the image.
+//	guard  --host H --port P --listen A --uid U --gid G -- cmd   (wslc) runs cmd in an empty
+//	       network namespace (only lo); a relay inside reaches the host proxy through a
+//	       unix socket that the parent, still in the container's netns, forwards to H:P.
 package main
 
 import (
@@ -43,6 +42,9 @@ func die(msg string) {
 	os.Exit(125)
 }
 
+// prSetNoNewPrivs: PR_SET_NO_NEW_PRIVS, set on the workload before exec.
+const prSetNoNewPrivs = 38
+
 // ---- relay ----------------------------------------------------------------
 
 func relay(args []string) {
@@ -66,6 +68,11 @@ func relay(args []string) {
 		die("relay listen: " + err.Error())
 	}
 	go serve(ln, func() (net.Conn, error) { return net.Dial("unix", *sock) })
+	// no_new_privs for the workload (inherited across exec): apple's
+	// `container run` has no --security-opt, so the relay does it here.
+	if _, _, e := syscall.RawSyscall(syscall.SYS_PRCTL, prSetNoNewPrivs, 1, 0); e != 0 {
+		die("relay: prctl(no_new_privs): " + e.Error())
+	}
 	if *uid >= 0 {
 		dropPrivs(*uid, *gid)
 	}
@@ -133,7 +140,7 @@ func loUp() error {
 
 // dropPrivs irreversibly drops root before the workload starts.
 func dropPrivs(uid, gid int) {
-	const prSetNoNewPrivs = 38
+
 	if _, _, e := syscall.RawSyscall(syscall.SYS_PRCTL, prSetNoNewPrivs, 1, 0); e != 0 {
 		die("guard: prctl(no_new_privs): " + e.Error())
 	}
