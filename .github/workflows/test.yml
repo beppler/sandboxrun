@@ -16,8 +16,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # macOS is opt-in via the test-on-mac PR label.
-        os: ${{ fromJSON(contains(github.event.pull_request.labels.*.name, 'test-on-mac') && '["ubuntu-latest","windows-latest","macos-latest"]' || '["ubuntu-latest","windows-latest"]') }}
+        # Linux always runs; macOS and Windows are opt-in via the
+        # test-on-mac / test-on-windows PR labels.
+        os: ${{ fromJSON(format('["ubuntu-latest"{0}{1}]', contains(github.event.pull_request.labels.*.name, 'test-on-windows') && ',"windows-latest"' || '', contains(github.event.pull_request.labels.*.name, 'test-on-mac') && ',"macos-latest"' || '')) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
