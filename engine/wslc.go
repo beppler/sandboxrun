@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"path/filepath"
+	"strconv"
 )
 
 // wslc (Windows): no host-only network mode was found, so the container keeps
@@ -13,7 +14,8 @@ import (
 //	sandboxinit guard  (runs as root with SYS_ADMIN+NET_ADMIN)
 //	  1. resolves host.wslc.internal (= the Windows host as seen from the container)
 //	  2. runs the workload in an empty network namespace (only lo); a relay there
-//	     reaches host:proxyPort through a unix socket. No nft/iptables needed.
+//	     reaches host:proxyPort through a unix socket that the parent, still in the
+//	     container's netns, forwards to H:P. No nft/iptables needed in the image.
 //	  3. sets no_new_privs, drops to UID/GID, execs the real command
 //
 // ASSUMPTIONS to verify:
@@ -45,9 +47,32 @@ func (wslc) Prepare(_ context.Context, s Spec) (*Plan, error) {
 	}
 	port := ln.Addr().(*net.TCPAddr).Port
 
+	uid, gid := s.UID, s.GID
+	if uid == 0 {
+		uid, gid = 1000, 1000
+	}
+	runArgs := []string{
+		"--rm",
+		"--cap-add", "SYS_ADMIN", // CLONE_NEWNET
+		"--cap-add", "NET_ADMIN", // bring lo up in the new netns
+		"--user", "0",
+		"-v", helper + ":/sandboxinit:ro",
+		"--entrypoint", "/sandboxinit",
+	}
+	runArgs = commonRunArgs(runArgs, s, va)
+	args := []string{
+		"guard",
+		"--host", "host.wslc.internal",
+		"--port", strconv.Itoa(port),
+		"--listen", relayListen,
+		"--uid", strconv.Itoa(uid),
+		"--gid", strconv.Itoa(gid),
+		"--",
+	}
+	args = append(args, s.Cmd...)
+
 	// The container's default gateway is only the VM's bridge, not Windows;
 	// wslc exposes the Windows host as host.wslc.internal.
-	runArgs, args := guardRun(s, helper, va, "host.wslc.internal", port)
 	return &Plan{
 		Prefix:   []string{"wslc", "container", "run"},
 		RunArgs:  runArgs,

@@ -12,9 +12,8 @@ import (
 
 func TestNameArg(t *testing.T) {
 	// All engines use the same podman-style run flags, so --name must
-	// appear in RunArgs when set. apple is skipped: its Prepare shells out
-	// to `container network create`.
-	for _, e := range []Engine{podman{}, wslc{}} {
+	// appear in RunArgs when set.
+	for _, e := range []Engine{podman{}, wslc{}, apple{}} {
 		plan, err := e.Prepare(context.Background(), Spec{Name: "mysandbox", HelperPath: "/tmp/sandboxinit"})
 		if err != nil {
 			t.Fatal(err)
@@ -153,17 +152,8 @@ func TestDefault(t *testing.T) {
 	}
 }
 
-func TestLocalhostIP(t *testing.T) {
-	if ip, ok := localhostIP("domain host.container.internal\nsearch host.container.internal\nnameserver 127.0.0.1\nport 1053\noptions localhost:203.0.113.113\n"); !ok || ip != "203.0.113.113" {
-		t.Fatalf("got %q, %v", ip, ok)
-	}
-	if _, ok := localhostIP("domain x\n"); ok {
-		t.Fatal("want not found")
-	}
-}
-
 func TestProxyEnv(t *testing.T) {
-	for _, e := range []Engine{podman{}, wslc{}} {
+	for _, e := range []Engine{podman{}, wslc{}, apple{}} {
 		plan, err := e.Prepare(context.Background(), Spec{HelperPath: "/tmp/sandboxinit"})
 		if err != nil {
 			t.Fatal(err)
@@ -190,33 +180,41 @@ func TestWslcGuardListen(t *testing.T) {
 	}
 }
 
-// apple must run the workload behind guard on its host-only network.
-func TestAppleGuardArgs(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("fake `container` is a shell script")
-	}
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "container"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	appleResolver = filepath.Join(dir, "resolver")
-	t.Cleanup(func() { appleResolver = "/etc/resolver/containerization." + appleHost })
-	if err := os.WriteFile(appleResolver, []byte("options localhost:203.0.113.113\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+// apple is a podman-style run: no network, no caps, socket mount + relay.
+func TestApplePodmanStyle(t *testing.T) {
 	plan, err := apple{}.Prepare(context.Background(), Spec{Name: "sb", HelperPath: "/tmp/sandboxinit", Cmd: []string{"true"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer plan.Listener.Close()
+	defer plan.Cleanup()
+	if _, ok := plan.Listener.Addr().(*net.UnixAddr); !ok {
+		t.Errorf("listener is not a unix socket: %v", plan.Listener.Addr())
+	}
 	run, args := strings.Join(plan.RunArgs, " "), strings.Join(plan.Args, " ")
-	for _, want := range []string{"--network sb", "--cap-add SYS_ADMIN", "--cap-add NET_ADMIN", "HTTP_PROXY=http://" + relayListen} {
+	for _, want := range []string{"--network none", "--cap-drop all"} {
 		if !strings.Contains(run, want) {
 			t.Errorf("RunArgs missing %q: %s", want, run)
 		}
 	}
-	if !strings.HasPrefix(args, "guard --host 203.0.113.113 ") || !strings.Contains(args, "--listen "+relayListen+" ") {
-		t.Errorf("guard args wrong: %s", args)
+	for _, bad := range []string{"--cap-add", "--user", "guard"} {
+		if strings.Contains(run, bad) {
+			t.Errorf("RunArgs contains %q: %s", bad, run)
+		}
+	}
+	if !strings.HasPrefix(args, "relay --sock "+appleSock+" --listen "+relayListen+" ") {
+		t.Errorf("relay args wrong: %s", args)
+	}
+}
+
+func TestAppleSocketPerms(t *testing.T) {
+	plan, err := apple{}.Prepare(context.Background(), Spec{HelperPath: "/tmp/sandboxinit"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer plan.Cleanup()
+	p := plan.Listener.Addr().String()
+	i, err := os.Stat(p)
+	if err != nil || i.Mode().Perm()&0o666 != 0o666 {
+		t.Errorf("socket %s perms: %v, %v", p, i.Mode(), err)
 	}
 }

@@ -24,7 +24,7 @@ sandboxrun -allow google.com -allow "*.google.com" -image alpine -- wget -q -S -
 | `-helper PATH` | Path to a Linux build of `sandboxinit` (podman, wslc, apple). Default: `sandboxinit-linux-<arch>` next to the `sandboxrun` binary |
 | `-volume HOST:CTR[:rw]` | Mount a host path into the container, repeatable; default read-only, add `:rw` for read-write |
 | `-it` | Interactive TTY |
-| `-uid` / `-gid` | wslc, apple: user the workload runs as inside the container (default 1000) |
+| `-uid` / `-gid` | wslc: user the workload runs as inside the container (default 1000) |
 | `-log DEST` | Proxy log: empty = off, `-` = stderr, otherwise a file path |
 
 ## How it works
@@ -42,13 +42,10 @@ Chosen automatically by OS.
 
 - **podman** (Linux): container has no network; `sandboxinit relay` forwards
   TCP to the proxy over a Unix socket.
-- **apple** (macOS): container runs on a host-only network; the proxy listens
-  on the host's loopback and is reached at the IP that the DNS entry maps to localhost. Required one-time
-  setup: `sudo container system dns create --localhost 203.0.113.113 host.container.internal`.
-  Without it (no `localhost:<ip>` option in
-  `/etc/resolver/containerization.host.container.internal`) sandboxrun refuses to start.
-  As on wslc, the workload runs in an empty network namespace as `-uid`/`-gid`;
-  its only way out is a relay to the host proxy. No firewall tool is needed in the image.
+- **apple** (macOS): container runs with `--network none` (loopback only); the
+  proxy listens on a Unix socket that is bind-mounted into the container and
+  exposed by `sandboxinit relay` as `127.0.0.1:3128`. No sudo, no DNS entry,
+  no extra setup.
 - **wslc** (Windows): proxy binds on the host's loopback (`127.0.0.1`); the
   workload runs in an empty network namespace as `-uid`/`-gid`.
 

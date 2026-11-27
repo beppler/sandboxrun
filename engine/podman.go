@@ -18,6 +18,22 @@ import (
 // unless you also add --userns=keep-id and run as your own uid.
 type podman struct{}
 
+// unixSocketListener creates a temp dir holding the proxy socket, bound and
+// reachable only by this host user (apple loosens both for the VM).
+func unixSocketListener() (dir string, ln net.Listener, err error) {
+	dir, err = os.MkdirTemp("", "sandbox-") // created 0700
+	if err != nil {
+		return
+	}
+	ln, err = net.Listen("unix", filepath.Join(dir, podmanSockName))
+	if err != nil {
+		os.RemoveAll(dir)
+		return
+	}
+	_ = os.Chmod(filepath.Join(dir, podmanSockName), 0o600)
+	return
+}
+
 const (
 	podmanSockDir  = "/run/sandbox"
 	podmanSockName = "proxy.sock"
@@ -36,17 +52,10 @@ func (podman) Prepare(_ context.Context, s Spec) (*Plan, error) {
 	if err != nil {
 		return nil, err
 	}
-	dir, err := os.MkdirTemp("", "sandbox-") // created 0700
+	dir, ln, err := unixSocketListener()
 	if err != nil {
 		return nil, err
 	}
-	sock := filepath.Join(dir, podmanSockName)
-	ln, err := net.Listen("unix", sock)
-	if err != nil {
-		os.RemoveAll(dir)
-		return nil, err
-	}
-	_ = os.Chmod(sock, 0o600)
 
 	args := []string{
 		"--rm", "--init",
