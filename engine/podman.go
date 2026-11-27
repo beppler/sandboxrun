@@ -43,7 +43,7 @@ func (podman) Prepare(_ context.Context, s Spec) (*Plan, error) {
 		"--security-opt", "no-new-privileges",
 		// ",z" relabels for SELinux hosts; harmless elsewhere.
 		"-v", helper + ":/sandboxinit:ro,z",
-		"-v", filepath.Join(dir, proxySockName) + ":" + containerSock + ":z",
+		"-v", filepath.Join(dir, proxySockName) + ":" + podmanSock + ":z",
 		"--entrypoint", "/sandboxinit",
 	}
 	args = append(args, va...)
@@ -55,7 +55,7 @@ func (podman) Prepare(_ context.Context, s Spec) (*Plan, error) {
 		args = append(args, "--name", s.Name)
 	}
 
-	post := []string{"relay", "--sock", containerSock, "--listen", relayListen, "--"}
+	post := []string{"relay", "--sock", podmanSock, "--listen", relayListen, "--"}
 	post = append(post, s.Cmd...)
 
 	return &Plan{

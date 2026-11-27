@@ -180,6 +180,21 @@ func TestWslcGuardListen(t *testing.T) {
 	}
 }
 
+func TestPodmanSocketMount(t *testing.T) {
+	plan, err := podman{}.Prepare(context.Background(), Spec{Name: "sb", HelperPath: "/tmp/sandboxinit", Cmd: []string{"true"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer plan.Cleanup()
+	run, args := strings.Join(plan.RunArgs, " "), strings.Join(plan.Args, " ")
+	if want := "-v " + plan.Listener.Addr().String() + ":" + podmanSock + ":z"; !strings.Contains(run, want) {
+		t.Errorf("RunArgs missing socket mount %q: %s", want, run)
+	}
+	if !strings.HasPrefix(args, "relay --sock "+podmanSock+" --listen "+relayListen+" ") {
+		t.Errorf("relay args wrong: %s", args)
+	}
+}
+
 // apple is a podman-style run: no network, no caps, socket mount + relay.
 func TestApplePodmanStyle(t *testing.T) {
 	plan, err := apple{}.Prepare(context.Background(), Spec{Name: "sb", HelperPath: "/tmp/sandboxinit", Cmd: []string{"true"}})

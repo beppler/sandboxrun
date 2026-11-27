@@ -11,9 +11,13 @@ import (
 // VM mount). Shared by the engines that mount a host socket: podman, apple.
 const proxySockName = "proxy.sock"
 
-// containerSock: where the proxy socket is mounted inside the container. /tmp
-// exists in every image, and a file mount needs an existing parent dir.
-const containerSock = "/tmp/sandbox-proxy.sock"
+// Where the proxy socket is mounted inside the container. A file mount needs
+// an existing parent dir: /tmp exists in every image (apple); /run is never a
+// user volume target (podman).
+const (
+	containerSock = "/tmp/sandbox-proxy.sock"
+	podmanSock    = "/run/sandbox-proxy.sock"
+)
 
 func unixSocketListener() (dir string, ln net.Listener, err error) {
 	dir, err = os.MkdirTemp("", "sandbox-") // created 0700
